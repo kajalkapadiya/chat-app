@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./login.css";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,12 +20,22 @@ const Login = () => {
     console.log(response);
 
     if (response.ok) {
+      const data = await response.json();
+      localStorage.setItem("token", data.token);
       console.log("User logged in successfully!");
-      // Handle successful login (e.g., redirect to dashboard)
+      navigate("/");
+    } else if (response.status === 404) {
+      console.log("User not found");
+    } else if (response.status === 401) {
+      console.log("User not authorized");
     } else {
-      console.log("Failed to log in user");
+      console.log("Failed to login");
     }
     console.log({ email, password });
+  };
+
+  const navigateToSignup = () => {
+    navigate("/signup");
   };
 
   return (
@@ -52,6 +64,9 @@ const Login = () => {
         </div>
         <button type="submit" className="login-button">
           Login
+        </button>
+        <button onClick={navigateToSignup} className="signup-button">
+          Sign Up
         </button>
       </form>
     </div>

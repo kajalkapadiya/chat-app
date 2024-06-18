@@ -6,6 +6,7 @@ const cors = require("cors");
 const bcrypt = require("bcrypt");
 const User = require("./User");
 require("./mongoConfig");
+const jwt = require("jsonwebtoken");
 
 const app = express();
 const PORT = 3000;
@@ -61,7 +62,11 @@ app.post("/login", async (req, res) => {
       return res.status(400).send("Invalid credentials");
     }
 
-    res.status(200).send("User logged in successfully!");
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    res.status(200).json({ token });
   } catch (error) {
     console.error(error);
     res.status(500).send("Internal Server Error");
