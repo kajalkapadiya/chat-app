@@ -2,9 +2,8 @@ import React, { useState, useEffect } from "react";
 import { io } from "socket.io-client";
 import "./chatWindow.css";
 
-const ChatWindow = ({ token }) => {
+const ChatWindow = () => {
   const [users, setUsers] = useState([]); // Ensure users is an array
-  const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [socket, setSocket] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
@@ -43,9 +42,13 @@ const ChatWindow = ({ token }) => {
   }, []);
 
   const fetchMessages = async () => {
-    const response = await fetch("http://localhost:3000/api/messages");
-    const data = await response.json();
-    setChatMessages(data);
+    try {
+      const response = await fetch("http://localhost:3000/api/messages");
+      const data = await response.json();
+      setChatMessages(data);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+    }
   };
 
   const sendMessage = (e) => {
@@ -53,6 +56,7 @@ const ChatWindow = ({ token }) => {
     if (message.trim() && socket) {
       socket.emit("sendMessage", message);
       setMessage("");
+      fetchMessages();
     }
   };
 
