@@ -1,12 +1,12 @@
-// backend/index.js
-
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const User = require("./User");
+const ChatMessage = require("./ChatMessage");
 require("./mongoConfig");
 const jwt = require("jsonwebtoken");
+const { Server } = require("socket.io");
 
 const app = express();
 const PORT = 3000;
@@ -17,20 +17,16 @@ app.use(bodyParser.json());
 app.post("/signup", async (req, res) => {
   const { name, email, phone, password } = req.body;
   console.log({ name, email, phone, password });
-  // Here, you would normally handle user registration, e.g., save to a database
 
   try {
-    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).send("User already exists");
     }
 
-    // Encrypt the password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create a new user
     const newUser = new User({
       name,
       email,
@@ -38,9 +34,7 @@ app.post("/signup", async (req, res) => {
       password: hashedPassword,
     });
 
-    // Save the user to the database
     await newUser.save();
-
     res.status(201).send("User registered successfully!");
   } catch (error) {
     console.error(error);
@@ -71,6 +65,75 @@ app.post("/login", async (req, res) => {
     console.error(error);
     res.status(500).send("Internal Server Error");
   }
+});
+
+app.get("/api/messages", async (req, res) => {
+  try {
+    const messages = await ChatMessage.find().sort({ timestamp: 1 });
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch messages" });
+  }
+});
+
+const server = require("http").createServer(app);
+const io = new Server(3001, {
+  cors: {
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST"],
+  },
+});
+
+let onlineUsers = [];
+
+io.use((socket, next) => {
+  const token = socket.handshake.query.token;
+  jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+    if (err) return next(new Error("Authentication error"));
+    socket.userId = decoded.id;
+
+    try {
+      const user = await User.findById(socket.userId);
+      if (user) {
+        socket.userDetails = {
+          id: user._id,
+          name: user.name,
+        };
+        next();
+      } else {
+        next(new Error("User not found"));
+      }
+    } catch (error) {
+      next(new Error("Internal Server Error"));
+    }
+  });
+});
+
+io.on("connection", async (socket) => {
+  const userId = socket.userId;
+  const userDetails = socket.userDetails;
+
+  if (!onlineUsers.some((user) => user.id === userId)) {
+    onlineUsers.push(userDetails);
+  }
+  const allUsers = await User.find({});
+  io.emit("users", { onlineUsers: onlineUsers, allUsers: allUsers });
+
+  socket.on("sendMessage", async (message) => {
+    io.emit("message", { user: userDetails.name, text: message });
+    // Save the message to the database
+    const chatMessage = new ChatMessage({
+      userId: userId,
+      userName: userDetails.name,
+      message: message,
+    });
+    await chatMessage.save();
+  });
+
+  socket.on("disconnect", () => {
+    onlineUsers = onlineUsers.filter((user) => user.id !== userId);
+    io.emit("users", { onlineUsers: onlineUsers, allUsers: allUsers });
+  });
 });
 
 app.listen(PORT, () => {

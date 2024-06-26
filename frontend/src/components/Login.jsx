@@ -17,13 +17,13 @@ const Login = () => {
       body: JSON.stringify({ email, password }),
     });
 
-    console.log(response);
-
     if (response.ok) {
       const data = await response.json();
       localStorage.setItem("token", data.token);
+      console.log(data.token);
       console.log("User logged in successfully!");
-      navigate("/");
+      localStorage.setItem("token", data.token); // Store the token
+      navigate("/chat");
     } else if (response.status === 404) {
       console.log("User not found");
     } else if (response.status === 401) {
@@ -31,7 +31,6 @@ const Login = () => {
     } else {
       console.log("Failed to login");
     }
-    console.log({ email, password });
   };
 
   const navigateToSignup = () => {
