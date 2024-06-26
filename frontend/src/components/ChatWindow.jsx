@@ -34,9 +34,12 @@ const ChatWindow = () => {
 
     setSocket(socket);
 
-    fetchMessages();
+    const interval = setInterval(() => {
+      fetchMessages();
+    }, 1000);
 
     return () => {
+      clearInterval(interval);
       socket.disconnect();
     };
   }, []);
@@ -56,7 +59,6 @@ const ChatWindow = () => {
     if (message.trim() && socket) {
       socket.emit("sendMessage", message);
       setMessage("");
-      fetchMessages();
     }
   };
 
