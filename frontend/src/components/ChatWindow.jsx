@@ -29,13 +29,24 @@ const ChatWindow = () => {
     });
 
     socket.on("message", (message) => {
-      setChatMessages((prevMessages) => [...prevMessages, message]);
+      setChatMessages((prevMessages) => {
+        {
+          const updatedMessages = [...prevMessages, message];
+          localStorage.setItem(
+            "chatMessages",
+            JSON.stringify(updatedMessages.slice(-10))
+          );
+          return updatedMessages.slice(-10);
+        }
+      });
     });
 
     setSocket(socket);
 
+    loadMessagesFromLocalStorage();
+
     const interval = setInterval(() => {
-      fetchMessages();
+      fetchNewMessages();
     }, 1000);
 
     return () => {
@@ -44,14 +55,32 @@ const ChatWindow = () => {
     };
   }, []);
 
-  const fetchMessages = async () => {
-    try {
-      const response = await fetch("http://localhost:3000/api/messages");
-      const data = await response.json();
-      setChatMessages(data);
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-    }
+  const loadMessagesFromLocalStorage = async () => {
+    const storedMessages =
+      JSON.parse(localStorage.getItem("chatMessages")) || [];
+    setChatMessages(storedMessages);
+    const lastMessageTimestamp =
+      storedMessages.length > 0
+        ? new Date(storedMessages[storedMessages.length - 1].timestamp)
+        : null;
+    fetchNewMessages(lastMessageTimestamp);
+  };
+
+  const fetchNewMessages = async (lastMessageTimestamp) => {
+    const url = lastMessageTimestamp
+      ? `http://localhost:3000/api/messages?since=${lastMessageTimestamp.toISOString()}`
+      : "http://localhost:3000/api/messages";
+
+    const response = await fetch(url, { credentials: "include" });
+    const data = await response.json();
+    setChatMessages((prevMessages) => {
+      const updatedMessages = [...prevMessages, ...data];
+      localStorage.setItem(
+        "chatMessages",
+        JSON.stringify(updatedMessages.slice(-10))
+      );
+      return updatedMessages.slice(-10);
+    });
   };
 
   const sendMessage = (e) => {
@@ -68,7 +97,7 @@ const ChatWindow = () => {
         <h3>Users</h3>
         <ul>
           {users.map((user) => (
-            <li key={`${user.id}-${user.name}`}>{user.name}</li>
+            <li key={`${user.id}-${user.name}`}>{user.name} joined</li>
           ))}
         </ul>
       </div>

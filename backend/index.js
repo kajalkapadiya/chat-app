@@ -11,7 +11,13 @@ const { Server } = require("socket.io");
 const app = express();
 const PORT = 3000;
 
-app.use(cors());
+const corsOptions = {
+  origin: "http://localhost:5173", // Update with your actual frontend origin
+  methods: ["GET", "POST"],
+  credentials: true, // Allow cookies and authorization headers
+};
+
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
 app.post("/signup", async (req, res) => {
@@ -68,11 +74,17 @@ app.post("/login", async (req, res) => {
 });
 
 app.get("/api/messages", async (req, res) => {
+  const since = req.query.since;
+  let query = {};
+  if (since) {
+    query = { timestamp: { $gt: new Date(since) } };
+  }
   try {
-    const messages = await ChatMessage.find().sort({ timestamp: 1 });
+    const messages = await ChatMessage.find(query);
     res.json(messages);
-  } catch (err) {
-    res.status(500).json({ message: "Failed to fetch messages" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
   }
 });
 
