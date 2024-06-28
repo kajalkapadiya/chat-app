@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { io } from "socket.io-client";
+import jwtDecode from "jwt-decode";
 import "./chatWindow.css";
-import { jwtDecode } from "jwt-decode";
 
 const ChatWindow = () => {
   const [groups, setGroups] = useState([]); // List of groups user is part of
@@ -13,17 +13,12 @@ const ChatWindow = () => {
   const [joinGroupId, setJoinGroupId] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
 
-  console.log(groups);
-  console.log(currentGroup);
-  console.log(users);
-  console.log(socket);
-  console.log(chatMessages);
-
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
-      const { id } = jwtDecode(token);
-      localStorage.setItem("userId", id);
+      const { userId } = jwtDecode(token);
+      localStorage.setItem("userId", userId); // Save the userId to localStorage
+
       const socket = io("http://localhost:3001", {
         query: { token },
       });
@@ -33,46 +28,35 @@ const ChatWindow = () => {
       });
 
       socket.on("groups", (data) => {
+        console.log("Received groups:", data.groups);
         setGroups(data.groups);
-        console.log(data.groups);
       });
 
-      socket.on("groupMembers", (data) => {
-        setUsers(data.members || []);
+      socket.on("users", (data) => {
+        setUsers(data.allUsers || []);
       });
 
       socket.on("message", (message) => {
-        setChatMessages((prevMessages) => [...prevMessages, message]);
+        if (message.groupId === currentGroup?._id) {
+          setChatMessages((prevMessages) => [...prevMessages, message]);
+        }
       });
 
       setSocket(socket);
     }
-    const interval = setInterval(() => {
-      if (currentGroup) {
-        fetchGroupMessages(currentGroup._id);
-      }
-    }, 1000);
-    return () => {
-      if (socket) {
-        clearInterval(interval);
-        socket.disconnect();
-      }
-    };
   }, [currentGroup]);
 
   const sendMessage = (e) => {
     e.preventDefault();
     if (message.trim() && socket) {
-      socket.emit("sendMessage", {
-        groupId: currentGroup._id,
-        message: message,
-      });
+      socket.emit("sendMessage", { groupId: currentGroup._id, text: message });
       setMessage("");
     }
   };
 
   const createGroup = async () => {
     const userId = localStorage.getItem("userId");
+    console.log(userId);
     const response = await fetch("http://localhost:3000/createGroup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -103,28 +87,6 @@ const ChatWindow = () => {
     }
   };
 
-  const fetchGroupMessages = async (groupId) => {
-    const token = localStorage.getItem("token");
-    const response = await fetch(
-      `http://localhost:3000/api/groupMessages?groupId=${groupId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-    if (response.ok) {
-      const messages = await response.json();
-      setChatMessages(messages);
-    }
-  };
-
-  const handleGroupSelect = async (group) => {
-    setCurrentGroup(group);
-    socket.emit("getGroupMembers", group._id); // Request group members
-    fetchGroupMessages(group._id); // Fetch messages when group is selected
-  };
-
   return (
     <div className="chat-window">
       <div className="group-list">
@@ -133,7 +95,7 @@ const ChatWindow = () => {
           {groups.map((group) => (
             <li
               key={group._id}
-              onClick={() => handleGroupSelect(group)}
+              onClick={() => setCurrentGroup(group)}
               className={
                 currentGroup && currentGroup._id === group._id ? "active" : ""
               }
@@ -173,7 +135,7 @@ const ChatWindow = () => {
             <div className="messages">
               {chatMessages.map((msg, index) => (
                 <div key={index} className="message">
-                  <strong>{msg.userName}</strong>: {msg.message}
+                  <strong>{msg.userName}</strong>: {msg.text}
                 </div>
               ))}
             </div>

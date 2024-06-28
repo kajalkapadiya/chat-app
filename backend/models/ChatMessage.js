@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const chatMessageSchema = new mongoose.Schema({
+  groupId: { type: mongoose.Schema.Types.ObjectId, ref: "Group" },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
