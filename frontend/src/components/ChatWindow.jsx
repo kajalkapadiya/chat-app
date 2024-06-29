@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { io } from "socket.io-client";
 import "./chatWindow.css";
 import { jwtDecode } from "jwt-decode";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const ChatWindow = () => {
   const [groups, setGroups] = useState([]); // List of groups user is part of
@@ -12,12 +14,8 @@ const ChatWindow = () => {
   const [newGroupName, setNewGroupName] = useState("");
   const [joinGroupId, setJoinGroupId] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
-
-  console.log(groups);
-  console.log(currentGroup);
-  console.log(users);
-  console.log(socket);
-  console.log(chatMessages);
+  const [showAddMemberInput, setShowAddMemberInput] = useState(false);
+  const [addMemberInput, setAddMemberInput] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -34,7 +32,6 @@ const ChatWindow = () => {
 
       socket.on("groups", (data) => {
         setGroups(data.groups);
-        console.log(data.groups);
       });
 
       socket.on("groupMembers", (data) => {
@@ -125,9 +122,139 @@ const ChatWindow = () => {
     fetchGroupMessages(group._id); // Fetch messages when group is selected
   };
 
+  // const handleAddMember = async () => {
+  //   const userId = localStorage.getItem("userId");
+  //   const response = await fetch("http://localhost:3000/addMember", {
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify({
+  //       groupId: currentGroup._id,
+  //       memberId,
+  //       adminId: userId,
+  //     }),
+  //   });
+
+  //   if (response.ok) {
+  //     const updatedGroup = await response.json();
+  //     setUsers(updatedGroup.members);
+  //   }
+  // };
+
+  const handleAddMember = async () => {
+    setShowAddMemberInput(true);
+  };
+
+  const addMember = async () => {
+    const userId = localStorage.getItem("userId");
+    const response = await fetch("http://localhost:3000/addMember", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        groupId: currentGroup._id,
+        memberIdentifier: addMemberInput, // Could be name or email
+        adminId: userId,
+      }),
+    });
+
+    if (response.ok) {
+      const updatedGroup = await response.json();
+      setUsers(updatedGroup.members);
+      setShowAddMemberInput(false);
+      setAddMemberInput("");
+      toast.success("Member added successfully");
+    } else {
+      toast.error("Failed to add member");
+    }
+  };
+
+  const handleRemoveMember = async (memberId, group) => {
+    const userId = localStorage.getItem("userId");
+    const response = await fetch("http://localhost:3000/removeMember", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        groupId: currentGroup._id,
+        memberId,
+        adminId: userId,
+      }),
+    });
+
+    if (response.ok) {
+      const updatedGroup = await response.json();
+      console.log(updatedGroup);
+      setUsers(updatedGroup.members);
+      socket.emit("getGroupMembers", group._id);
+      toast.success("Member removed successfully");
+
+      // Find the removed member's name for the notification message
+      const removedMember = users.find((user) => user._id === memberId);
+      const removedMemberName = removedMember ? removedMember.name : memberId;
+
+      // Save the notification message to the database
+      const notificationMessage = {
+        userName: "System",
+        message: `${removedMemberName} is removed.`,
+        type: "notification",
+        groupId: currentGroup._id,
+      };
+
+      socket.emit("sendMessage", {
+        groupId: currentGroup._id,
+        message: notificationMessage.message,
+      });
+    } else {
+      toast.error("Failed to remove member");
+    }
+  };
+
+  const handleMakeAdmin = async (memberId, group) => {
+    const userId = localStorage.getItem("userId");
+    try {
+      const response = await fetch("http://localhost:3000/makeAdmin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          groupId: currentGroup._id,
+          memberId,
+          adminId: userId,
+        }),
+      });
+
+      if (response.ok) {
+        const updatedGroup = await response.json();
+        setUsers(updatedGroup.members); // Update users state with the updated members
+        socket.emit("getGroupMembers", group._id);
+
+        console.log(updatedGroup);
+        // Find the member's name for the notification message
+        const adminMember = users.find((user) => user._id === memberId);
+        const adminMemberName = adminMember ? adminMember.name : memberId;
+
+        // Save the notification message to the database
+        const notificationMessage = {
+          userName: "System",
+          message: `${adminMemberName} is now an admin.`,
+          type: "notification",
+          groupId: currentGroup._id,
+        };
+
+        // Emit socket event to send the notification message
+        socket.emit("sendMessage", notificationMessage);
+
+        toast.success("Member is now an admin");
+      } else {
+        toast.error("Failed to make member an admin");
+      }
+    } catch (error) {
+      console.error("Error making member an admin:", error);
+      toast.error("Failed to make member an admin");
+    }
+  };
+
   return (
     <div className="chat-window">
       <div className="group-list">
+        {/* list of all groups where user is member */}
         <h3>Groups</h3>
         <ul>
           {groups.map((group) => (
@@ -142,6 +269,9 @@ const ChatWindow = () => {
             </li>
           ))}
         </ul>
+
+        {/* create grp and join grp button */}
+
         <div className="group-actions">
           <input
             type="text"
@@ -163,17 +293,55 @@ const ChatWindow = () => {
         {currentGroup ? (
           <>
             <div className="user-list">
-              <h3>Users</h3>
+              <h2>{currentGroup.name}</h2>
+              <p>{currentGroup._id}</p>
+              <h4>Group Members</h4>
+              <button onClick={() => handleAddMember()}>Add member</button>
+              {showAddMemberInput && (
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Enter name or email"
+                    value={addMemberInput}
+                    onChange={(e) => setAddMemberInput(e.target.value)}
+                  />
+                  <button onClick={addMember}>Submit</button>
+                </div>
+              )}
               <ul>
                 {users.map((user) => (
-                  <li key={user._id}>{user.name}</li>
+                  <li key={user._id}>
+                    {user.name}
+
+                    <button
+                      onClick={() => handleRemoveMember(user._id, currentGroup)}
+                    >
+                      Remove
+                    </button>
+                    <button
+                      onClick={() => handleMakeAdmin(user._id, currentGroup)}
+                    >
+                      Make Admin
+                    </button>
+                  </li>
                 ))}
               </ul>
             </div>
             <div className="messages">
               {chatMessages.map((msg, index) => (
-                <div key={index} className="message">
-                  <strong>{msg.userName}</strong>: {msg.message}
+                <div
+                  key={index}
+                  className={`message ${
+                    msg.type === "notification" ? "notification" : ""
+                  }`}
+                >
+                  {msg.type === "notification" ? (
+                    <em>{msg.message}</em>
+                  ) : (
+                    <>
+                      <strong>{msg.userName}</strong>: {msg.message}
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -193,6 +361,7 @@ const ChatWindow = () => {
           </div>
         )}
       </div>
+      <ToastContainer />
     </div>
   );
 };

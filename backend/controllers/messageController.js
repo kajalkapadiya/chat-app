@@ -7,7 +7,7 @@ exports.getGroupMessages = async (req, res) => {
     query.timestamp = { $gt: new Date(since) };
   }
   try {
-    const messages = await ChatMessage.find(query);
+    const messages = await ChatMessage.find(query).sort("timestamp");
     res.json(messages);
   } catch (error) {
     console.error(error);

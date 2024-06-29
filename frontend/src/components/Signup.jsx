@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./signup.css";
 
 const Signup = () => {
@@ -6,6 +7,7 @@ const Signup = () => {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,6 +23,7 @@ const Signup = () => {
 
     if (response.ok) {
       console.log("User registered successfully!");
+      navigate("/chat");
     } else {
       console.log("Failed to register user");
     }
